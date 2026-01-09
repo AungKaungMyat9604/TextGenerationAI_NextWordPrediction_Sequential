@@ -10,6 +10,20 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 import numpy as np
 
+# Configure GPU memory growth to prevent OOM errors
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        print(f"✅ GPU configured: {len(gpus)} GPU(s) available")
+        for i, gpu in enumerate(gpus):
+            print(f"   GPU {i}: {tf.config.experimental.get_device_details(gpu).get('device_name', 'Unknown')}")
+    except RuntimeError as e:
+        print(f"GPU configuration error: {e}")
+else:
+    print("⚠️  No GPU detected, using CPU")
+
 
 class NextWordPredictionModel:
     """
@@ -52,7 +66,6 @@ class NextWordPredictionModel:
             Embedding(
                 input_dim=self.vocab_size,
                 output_dim=self.embedding_dim,
-                input_length=sequence_length,
                 name='embedding'
             ),
         ])

@@ -23,7 +23,9 @@ def train_model(text_file='data/sample_text.txt',
                 save_dir='models',
                 use_bhc_dataset=True,
                 bhc_data_dir='data/bhc_mimic_iv',
-                bhc_text_column='input'):
+                bhc_text_column='input',
+                max_words=None,
+                max_chars=None):
     """
     Train the sequential model for next word prediction.
     
@@ -41,6 +43,8 @@ def train_model(text_file='data/sample_text.txt',
         use_bhc_dataset: If True, load text from BHC MIMIC-IV Kaggle dataset
         bhc_data_dir: Directory where the BHC dataset CSV files are stored
         bhc_text_column: Column name in the BHC dataset to use as text
+        max_words: Maximum number of words to process (None for all). Use this to limit dataset size.
+        max_chars: Maximum number of characters to process (None for all). Use this to limit dataset size.
     """
     
     # Create save directory
@@ -74,7 +78,12 @@ def train_model(text_file='data/sample_text.txt',
     
     # Prepare training data
     print("\n[3/5] Preparing training sequences...")
-    X, y = preprocessor.prepare_training_data(text)
+    if max_words is None and max_chars is None:
+        print("WARNING: Processing entire dataset. This may require significant memory.")
+        print("Consider using max_words or max_chars to limit dataset size.")
+        print("For large datasets (100M+ words), start with max_words=1000000 (1M words)")
+    
+    X, y = preprocessor.prepare_training_data(text, max_words=max_words, max_chars=max_chars)
     
     # Split into train and validation sets
     split_idx = int(len(X) * (1 - validation_split))
@@ -247,6 +256,8 @@ def load_bhc_corpus(bhc_data_dir='data/bhc_mimic_iv', text_column='input'):
 
 if __name__ == "__main__":
     # Training configuration
+    # IMPORTANT: For large datasets, set max_words or max_chars to avoid memory issues
+    # Example: max_words=1000000 will process only the first 1 million words
     train_model(
         text_file='data/sample_text.txt',
         sequence_length=50,
@@ -261,5 +272,10 @@ if __name__ == "__main__":
         # Set this to True to train directly on the Kaggle BHC dataset
         use_bhc_dataset=True,
         bhc_data_dir='data/bhc_mimic_iv',
-        bhc_text_column='input'
+        bhc_text_column='input',
+        # Limit dataset size to avoid memory issues (adjust based on your RAM)
+        # For 8GB RAM, try max_words=500000 (500k words)
+        # For 16GB RAM, try max_words=2000000 (2M words)
+        max_words=1000000,  # Process first 1 million words
+        # max_chars=None,  # Alternative: limit by characters instead
     )

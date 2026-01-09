@@ -124,35 +124,56 @@ class TextPreprocessor:
             if len(seq) < self.sequence_length + 1:
                 continue
             
-            # Create sequences by sliding window
-            for i in range(len(seq) - self.sequence_length):
-                X.append(seq[i:i + self.sequence_length])
-                y.append(seq[i + self.sequence_length])
+            # For large sequences, use chunked approach
+            if len(seq) > 1000000:
+                X_chunk, y_chunk = self.create_sequences_chunked(seq)
+                X.extend(X_chunk)
+                y.extend(y_chunk)
+            else:
+                # Create sequences by sliding window for smaller sequences
+                for i in range(len(seq) - self.sequence_length):
+                    X.append(seq[i:i + self.sequence_length])
+                    y.append(seq[i + self.sequence_length])
         
-        X = np.array(X)
-        y = np.array(y)
+        X = np.array(X, dtype=np.int32)
+        y = np.array(y, dtype=np.int32)
         
         return X, y
     
-    def prepare_training_data(self, text):
+    def prepare_training_data(self, text, max_words=None, max_chars=None):
         """
         Complete preprocessing pipeline for training data.
         
         Args:
             text: Raw text string
+            max_words: Maximum number of words to process (None for all)
+            max_chars: Maximum number of characters to process (None for all)
         
         Returns:
             X: Input sequences
             y: Target words
         """
+        # Limit text size if specified
+        if max_chars is not None and len(text) > max_chars:
+            print(f"Limiting text to {max_chars:,} characters (from {len(text):,})")
+            text = text[:max_chars]
+        
         # Preprocess text
         words = self.preprocess_text(text)
+        
+        # Limit number of words if specified
+        if max_words is not None and len(words) > max_words:
+            print(f"Limiting text to {max_words:,} words (from {len(words):,})")
+            words = words[:max_words]
+        
         text_str = ' '.join(words)
         
         # Fit tokenizer
+        print("Fitting tokenizer...")
         self.fit_tokenizer(text_str)
         
         # Convert to sequences
+        print("Converting text to sequences...")
         sequences = self.text_to_sequences([text_str])
         
         # Flatten sequences
@@ -160,11 +181,56 @@ class TextPreprocessor:
         for seq in sequences:
             flat_sequences.extend(seq)
         
-        # Create training sequences
-        X, y = self.create_sequences([flat_sequences])
+        # Create training sequences using chunked approach for large datasets
+        print("Creating training sequences (this may take a while for large datasets)...")
+        X, y = self.create_sequences_chunked(flat_sequences)
         
-        print(f"Created {len(X)} training sequences")
+        print(f"Created {len(X):,} training sequences")
         print(f"Sequence length: {self.sequence_length}")
+        
+        return X, y
+    
+    def create_sequences_chunked(self, flat_sequence, chunk_size=1000000):
+        """
+        Create input-output pairs using chunked processing to save memory.
+        
+        Args:
+            flat_sequence: Flat list of word indices
+            chunk_size: Process sequences in chunks of this size
+        
+        Returns:
+            X: Input sequences
+            y: Target words
+        """
+        X = []
+        y = []
+        
+        total_length = len(flat_sequence)
+        if total_length < self.sequence_length + 1:
+            return np.array([]), np.array([])
+        
+        # Process in chunks to avoid memory issues
+        num_chunks = (total_length // chunk_size) + 1
+        
+        for chunk_idx in range(num_chunks):
+            start_idx = chunk_idx * chunk_size
+            end_idx = min(start_idx + chunk_size + self.sequence_length, total_length)
+            
+            if end_idx - start_idx < self.sequence_length + 1:
+                break
+            
+            chunk = flat_sequence[start_idx:end_idx]
+            
+            # Create sequences for this chunk
+            for i in range(len(chunk) - self.sequence_length):
+                X.append(chunk[i:i + self.sequence_length])
+                y.append(chunk[i + self.sequence_length])
+            
+            if (chunk_idx + 1) % 10 == 0:
+                print(f"  Processed chunk {chunk_idx + 1}/{num_chunks} ({len(X):,} sequences so far)...")
+        
+        X = np.array(X, dtype=np.int32)
+        y = np.array(y, dtype=np.int32)
         
         return X, y
     
